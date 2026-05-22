@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="230" viewBox="0 0 980 230" role="img" aria-labelledby="title desc">
+  <title id="title">Split-step Fourier diagnostic workflow</title>
+  <desc id="desc">A compact workflow from initial state to split-step propagation, diagnostics, regression tests, and exported figures.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#374151"/>
+    </marker>
+    <style>
+      .bg { fill: #fbfaf7; }
+      .box { fill: #ffffff; stroke: #374151; stroke-width: 1.6; rx: 10; }
+      .soft { fill: #eef6f4; stroke: #1f766c; }
+      .warn { fill: #fff5df; stroke: #9a6a10; }
+      .text { font-family: Inter, Segoe UI, Arial, sans-serif; fill: #111827; font-size: 17px; font-weight: 650; }
+      .sub { font-family: Inter, Segoe UI, Arial, sans-serif; fill: #4b5563; font-size: 13px; }
+      .line { stroke: #374151; stroke-width: 1.6; marker-end: url(#arrow); fill: none; }
+    </style>
+  </defs>
+  <rect class="bg" width="980" height="230"/>
+  <rect class="box soft" x="35" y="58" width="150" height="96"/>
+  <text class="text" x="58" y="96">initial state</text>
+  <text class="sub" x="58" y="121">grid, potential,</text>
+  <text class="sub" x="58" y="139">packet parameters</text>
+  <path class="line" d="M188 106 H247"/>
+  <rect class="box" x="255" y="40" width="185" height="132"/>
+  <text class="text" x="289" y="83">Strang SSF step</text>
+  <text class="sub" x="289" y="110">half potential phase</text>
+  <text class="sub" x="289" y="128">FFT kinetic phase</text>
+  <text class="sub" x="289" y="146">half potential phase</text>
+  <path class="line" d="M442 106 H501"/>
+  <rect class="box warn" x="510" y="58" width="170" height="96"/>
+  <text class="text" x="543" y="96">diagnostics</text>
+  <text class="sub" x="543" y="121">norm, energy,</text>
+  <text class="sub" x="543" y="139">state error, tails</text>
+  <path class="line" d="M682 106 H741"/>
+  <rect class="box" x="750" y="30" width="190" height="152"/>
+  <text class="text" x="788" y="75">outputs</text>
+  <text class="sub" x="788" y="103">figures/*.pdf</text>
+  <text class="sub" x="788" y="123">data/*.json, *.csv</text>
+  <text class="sub" x="788" y="143">regression tests</text>
+  <path class="line" d="M845 184 C845 210 110 210 110 158"/>
+  <text class="sub" x="364" y="205">rerun, compare, and audit exact values</text>
+</svg>

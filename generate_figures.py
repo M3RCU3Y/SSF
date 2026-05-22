@@ -31,12 +31,12 @@ plt.rcParams.update({
     'font.family': 'serif',
     'font.serif': ['Computer Modern Roman', 'DejaVu Serif', 'Times New Roman'],
     'mathtext.fontset': 'dejavuserif',
-    'font.size': 10,
-    'axes.labelsize': 10,
-    'axes.titlesize': 10,
-    'legend.fontsize': 8.6,
-    'xtick.labelsize': 8.2,
-    'ytick.labelsize': 8.2,
+    'font.size': 10.5,
+    'axes.labelsize': 10.5,
+    'axes.titlesize': 10.5,
+    'legend.fontsize': 9.2,
+    'xtick.labelsize': 9.0,
+    'ytick.labelsize': 9.0,
     'figure.dpi': 160,
     'savefig.dpi': 300,
     'pdf.fonttype': 42,
@@ -156,6 +156,18 @@ def max_tail_mass_from_heat(heat, x, dx, strip_fraction=0.10):
     return float(max(boundary_tail_mass_from_density(row, x, dx, strip_fraction) for row in heat))
 
 
+def max_left_right_tail_mass_from_heat(heat, x, dx, strip_fraction=0.10):
+    if heat.size == 0:
+        return 0.0, 0.0
+    half_width = 0.5 * (x[-1] - x[0] + dx)
+    strip_width = strip_fraction * (2.0 * half_width)
+    left_mask = x <= (-half_width + strip_width)
+    right_mask = x >= (half_width - strip_width)
+    left = max(float(dx * np.sum(row[left_mask])) for row in heat)
+    right = max(float(dx * np.sum(row[right_mask])) for row in heat)
+    return left, right
+
+
 def square_barrier_transmission(k_values, V0, width):
     """Plane-wave transmission through a square barrier in units hbar=m=1."""
     k_abs = np.abs(np.asarray(k_values, dtype=float))
@@ -183,6 +195,21 @@ def weighted_barrier_transmission(psi0, k, V0, width):
     weights = np.abs(ph)**2
     weights = weights / np.sum(weights)
     return float(np.sum(weights * square_barrier_transmission(k, V0, width)))
+
+
+def barrier_spectral_breakdown(psi0, k, V0, width):
+    ph = np.fft.fft(psi0, norm='ortho')
+    weights = np.abs(ph)**2
+    weights = weights / np.sum(weights)
+    coeff = square_barrier_transmission(k, V0, width)
+    energies = 0.5 * np.abs(k)**2
+    above = energies > V0
+    return {
+        'weighted_T': float(np.sum(weights * coeff)),
+        'above_mass': float(np.sum(weights[above])),
+        'above_contribution': float(np.sum(weights[above] * coeff[above])),
+        'below_contribution': float(np.sum(weights[~above] * coeff[~above])),
+    }
 
 
 def forward_euler(psi, V, k, dt):
@@ -272,7 +299,6 @@ def plot_snapshots(filename, x, snaps, dt, snap_times, title, xlim=None, ylim=No
         ax.fill_between(x, 0, scaled, alpha=0.18, step='mid', label=potential_label or 'scaled $V$')
     ax.set_xlabel(r'$x$')
     ax.set_ylabel(r'$|\psi(x,t)|^2$')
-    ax.set_title(title)
     if xlim:
         ax.set_xlim(*xlim)
     if ylim:
@@ -292,7 +318,6 @@ def plot_heatmap(filename, x, t, heat, title, xlim=None, barrier=None):
         ax.set_xlim(*xlim)
     ax.set_xlabel(r'$x$')
     ax.set_ylabel(r'$t$')
-    ax.set_title(title)
     cbar = fig.colorbar(im, ax=ax, pad=0.015)
     cbar.set_label(r'$|\psi|^2$')
     save_pdf(fig, filename)
@@ -347,7 +372,6 @@ def experiment_free():
     ax.semilogy(times, np.maximum(state_errors, 1e-18))
     ax.set_xlabel(r'$t$')
     ax.set_ylabel(r'phase-aligned $L^2_h$ error')
-    ax.set_title('Full-state analytic validation for free propagation')
     save_pdf(fig, 'fig_free_state_error.pdf')
     max_norm = np.max(np.abs(out['norms'] - out['norms'][0]))
     max_energy = np.max(np.abs(out['energies'] - out['energies'][0]))
@@ -370,6 +394,7 @@ def experiment_barrier():
     psi0 = normalize(gaussian(x, x0=-30.0, sigma=2.5, k0=2.2), dx)
     out = run_ssf(psi0, V, k, dx, dt, T, sample_every=8, snapshots=snap_times)
     tail_max = max_tail_mass_from_heat(out['heat'], x, dx)
+    tail_left, tail_right = max_left_right_tail_mass_from_heat(out['heat'], x, dx)
     plot_snapshots('fig_barrier_snapshots.pdf', x, out['snaps'], dt, snap_times,
                    'Finite barrier scattering: incident, reflected, and transmitted packets',
                    xlim=(-42, 45), ylim=(0, 0.22), potential=V, potential_label='scaled barrier')
@@ -379,13 +404,13 @@ def experiment_barrier():
     R = dx * np.sum(dens[x < a])
     B = dx * np.sum(dens[(x >= a) & (x <= b)])
     Tr = dx * np.sum(dens[x > b])
-    weighted_T = weighted_barrier_transmission(psi0, k, V0, b - a)
+    spectral = barrier_spectral_breakdown(psi0, k, V0, b - a)
+    weighted_T = spectral['weighted_T']
     fig, ax = plt.subplots(figsize=(5.2, 3.1))
     ax.bar([0,1,2], [R,B,Tr], tick_label=[r'$R$', r'$B$', r'$T$'])
     ax.scatter([2], [weighted_T], marker='D', s=42, color='crimson', zorder=5, label='spectral estimate')
     ax.set_ylim(0, 1)
     ax.set_ylabel('probability mass')
-    ax.set_title('Late-time probability partition in barrier test')
     for i,v in enumerate([R,B,Tr]):
         ax.text(i, v + 0.02, f'{v:.3f}', ha='center', va='bottom', fontsize=8)
     ax.legend(frameon=True, loc='upper right')
@@ -395,7 +420,11 @@ def experiment_barrier():
         'barrier_steps': int(round(T/dt)), 'barrier_norm_error': float(np.max(np.abs(out['norms'] - out['norms'][0]))),
         'barrier_R': float(R), 'barrier_B': float(B), 'barrier_Trans': float(Tr), 'barrier_total': float(R+B+Tr),
         'barrier_weighted_T': weighted_T, 'barrier_T_difference': float(abs(Tr - weighted_T)),
-        'barrier_tail_mass': tail_max, 'barrier_V0': V0, 'barrier_a': a, 'barrier_b': b,
+        'barrier_tail_mass': tail_max, 'barrier_tail_left': tail_left, 'barrier_tail_right': tail_right,
+        'barrier_above_spectral_mass': spectral['above_mass'],
+        'barrier_above_T_contribution': spectral['above_contribution'],
+        'barrier_below_T_contribution': spectral['below_contribution'],
+        'barrier_V0': V0, 'barrier_a': a, 'barrier_b': b,
     }
 
 
@@ -418,32 +447,35 @@ def experiment_harmonic():
     # diagnostics
     times = out['times']
     centers = np.empty_like(times)
+    variances = np.empty_like(times)
     psi = psi0.copy()
     centers[0] = expectation_x(psi, x, dx)
+    variances[0] = variance_x(psi, x, dx)
     for n in range(1, len(times)):
         psi = split_step(psi, V, k, dt)
         centers[n] = expectation_x(psi, x, dx)
+        variances[n] = variance_x(psi, x, dx)
     fig, ax = plt.subplots(figsize=(6.4, 3.2))
     exact_centers = 8.0 * np.cos(omega * times)
     center_error = float(np.max(np.abs(centers - exact_centers)))
+    variance_error = float(np.max(np.abs(variances - sigma**2)))
     ax.plot(times, centers, label=r'computed $\langle x\rangle_h$')
     ax.plot(times, exact_centers, '--', linewidth=1.1, label=r'$8\cos(\omega t)$ guide')
     ax.set_xlabel(r'$t$')
     ax.set_ylabel(r'$\langle x\rangle_h$')
-    ax.set_title('Harmonic oscillator center-of-mass diagnostic')
     ax.legend(frameon=True)
     save_pdf(fig, 'fig_harmonic_center.pdf')
     fig, ax = plt.subplots(figsize=(6.4, 3.2))
     ax.plot(times, out['energies'] - out['energies'][0])
     ax.set_xlabel(r'$t$')
     ax.set_ylabel(r'$E_h^n-E_h^0$')
-    ax.set_title('Harmonic oscillator energy diagnostic')
     save_pdf(fig, 'fig_harmonic_energy.pdf')
     return {
         'harmonic_L': L, 'harmonic_N': N, 'harmonic_dt': dt, 'harmonic_T': T, 'harmonic_steps': int(round(T/dt)),
         'harmonic_norm_error': float(np.max(np.abs(out['norms'] - out['norms'][0]))),
         'harmonic_energy_error': float(np.max(np.abs(out['energies'] - out['energies'][0]))),
-        'harmonic_center_error': center_error, 'harmonic_tail_mass': tail_max, 'harmonic_omega': omega,
+        'harmonic_center_error': center_error, 'harmonic_variance_error': variance_error,
+        'harmonic_tail_mass': tail_max, 'harmonic_omega': omega,
     }
 
 
@@ -474,7 +506,6 @@ def experiment_norm_comparison():
     ax.semilogy(times, np.maximum(np.abs(n_rk4 - n_rk4[0]), 1e-18), label='classical RK4')
     ax.set_xlabel(r'$t$')
     ax.set_ylabel(r'$|\|\psi^n\|_h^2-\|\psi^0\|_h^2|$')
-    ax.set_title('Norm error for unitary and non-unitary time steppers')
     ax.legend(frameon=True)
     save_pdf(fig, 'fig_norm_error_comparison.pdf')
     fig, ax = plt.subplots(figsize=(6.4, 3.15))
@@ -483,7 +514,6 @@ def experiment_norm_comparison():
     ax.plot(times, n_rk4, label='classical RK4')
     ax.set_xlabel(r'$t$')
     ax.set_ylabel(r'$\|\psi^n\|_h^2$')
-    ax.set_title('Discrete norm squared over time')
     ax.legend(frameon=True)
     save_pdf(fig, 'fig_norm_squared_comparison.pdf')
     return {
@@ -514,23 +544,18 @@ def experiment_convergence():
         for _ in range(steps):
             psi = split_step(psi, V, k, dt)
         # Remove a global phase before comparing, because phase is physically irrelevant and can obscure state-shape error.
-        phase = inner(psi, psi_ref, dx)
-        if abs(phase) > 0:
-            psi_aligned = psi * np.exp(-1j * np.angle(phase))
-        else:
-            psi_aligned = psi
+        psi_aligned = phase_align(psi, psi_ref, dx)
         errors.append(norm(psi_aligned - psi_ref, dx))
     errors = np.array(errors)
     coeff = np.polyfit(np.log(dts), np.log(errors), 1)
     slope = coeff[0]
     fig, ax = plt.subplots(figsize=(5.65, 3.3))
-    ax.loglog(dts, errors, 'o-', label=rf'observed slope ${slope:.2f}$')
+    ax.loglog(dts, errors, 'o-', label=rf'observed self-convergence slope ${slope:.2f}$')
     # reference slope 2 line through last point
     ref_line = errors[-1] * (dts / dts[-1])**2
     ax.loglog(dts, ref_line, '--', label=r'reference slope $2$')
     ax.set_xlabel(r'$\Delta t$')
-    ax.set_ylabel(r'phase-aligned $L^2_h$ error at $T=3$')
-    ax.set_title('Temporal convergence diagnostic for Strang splitting')
+    ax.set_ylabel(r'phase-aligned self-error at $T=3$')
     ax.legend(frameon=True)
     ax.invert_xaxis()
     save_pdf(fig, 'fig_time_convergence.pdf')
@@ -571,7 +596,6 @@ def experiment_spatial_convergence():
     ax.semilogy(Ns, errors, 'o-', label='phase-aligned error')
     ax.set_xlabel(r'$N$')
     ax.set_ylabel(r'$L^2_h$ error at $T=4$')
-    ax.set_title('Spatial refinement diagnostic for a free Gaussian packet')
     ax.grid(True, which='both', alpha=0.25)
     ax.legend(frameon=True)
     save_pdf(fig, 'fig_spatial_convergence.pdf')
@@ -607,7 +631,6 @@ def experiment_long_time_norm():
     ax.semilogy(sampled_t, np.maximum(sampled_err, 1e-18))
     ax.set_xlabel(r'$t$')
     ax.set_ylabel(r'$|\|\psi^n\|_h^2-\|\psi^0\|_h^2|$')
-    ax.set_title('Long-time norm preservation diagnostic')
     save_pdf(fig, 'fig_long_time_norm.pdf')
     return {
         'long_L': L, 'long_N': N, 'long_dt': dt, 'long_T': T,
@@ -643,7 +666,6 @@ def experiment_unitarity_defect():
     ax.hist(errs, bins=30, alpha=0.85)
     ax.set_xlabel(r'$|\|S z\|_h^2-\|z\|_h^2|$')
     ax.set_ylabel('random trials')
-    ax.set_title('Floating-point unitarity defect for explicit small-matrix test')
     save_pdf(fig, 'fig_unitarity_defect_hist.pdf')
     return {
         'unitarity_N': N, 'unitarity_dt': dt, 'unitarity_fro': float(fro), 'unitarity_two': float(two),
@@ -682,7 +704,6 @@ def experiment_time_reversal():
     ax.bar([c[0] for c in cases], [c[1] for c in cases])
     ax.set_yscale('log')
     ax.set_ylabel(r'phase-aligned recovery error')
-    ax.set_title('Forward-backward time-reversal diagnostic')
     save_pdf(fig, 'fig_time_reversal.pdf')
     return {
         'reverse_free_error': float(cases[0][1]),
@@ -740,7 +761,6 @@ def experiment_method_comparison():
     ax.set_xticks(pos)
     ax.set_xticklabels(names, rotation=18, ha='right')
     ax.set_ylabel('error at final time')
-    ax.set_title('Finite-dimensional method comparison')
     ax.legend(frameon=True)
     save_pdf(fig, 'fig_method_comparison.pdf')
 
@@ -792,7 +812,6 @@ def experiment_precision_sensitivity():
     ax.bar([row[0] for row in rows], [row[1] for row in rows])
     ax.set_yscale('log')
     ax.set_ylabel(r'max norm error')
-    ax.set_title('Precision sensitivity for stored split-step states')
     save_pdf(fig, 'fig_precision_sensitivity.pdf')
 
     if WRITE_TEX:
@@ -840,32 +859,52 @@ def make_parameter_table(results):
 def make_diagnostic_table(results):
     def math_sci(value):
         return f'${format_sci(value)}$'
+
+    core_rows = [
+        ('Free packet', 'max norm error', math_sci(results['free_norm_error'])),
+        ('Free packet', 'max full-state error', math_sci(results['free_state_error'])),
+        ('Free packet', 'max center error', math_sci(results['free_center_error'])),
+        ('Free packet', 'max variance error', math_sci(results['free_variance_error'])),
+        ('Barrier', '$T$ and spectral estimate', f"{results['barrier_Trans']:.3f}, {results['barrier_weighted_T']:.3f}"),
+        ('Boundary tails', 'free/barrier/harmonic maxima', f"{math_sci(results['free_tail_mass'])}, {math_sci(results['barrier_tail_mass'])}, {math_sci(results['harmonic_tail_mass'])}"),
+        ('Harmonic oscillator', 'max center error', math_sci(results['harmonic_center_error'])),
+        ('Harmonic oscillator', 'max variance error', math_sci(results['harmonic_variance_error'])),
+        ('Harmonic oscillator', 'max energy error', math_sci(results['harmonic_energy_error'])),
+    ]
+    stress_rows = [
+        ('Norm comparison', 'forward Euler final norm', f"{results['compare_fe_final_norm']:.3f}"),
+        ('Method comparison', 'CN state error', math_sci(results['method_cn_state_error'])),
+        ('Method comparison', 'Yoshida 4 state error', math_sci(results['method_y4_state_error'])),
+        ('Precision sensitivity', 'complex128/complex64 norm errors', f"{math_sci(results['precision_complex128_norm_error'])}, {math_sci(results['precision_complex64_norm_error'])}"),
+        ('Time reversal', 'free/barrier/harmonic errors', f"{math_sci(results['reverse_free_error'])}, {math_sci(results['reverse_barrier_error'])}, {math_sci(results['reverse_harmonic_error'])}"),
+        ('Temporal self-convergence', 'observed slope', f"{results['conv_slope']:.2f}"),
+        ('Spatial resolution', 'error ratio', math_sci(results['spatial_ratio'])),
+        ('Long-time norm', 'max norm error', math_sci(results['long_norm_error'])),
+        ('Explicit matrix', 'Frobenius defect', math_sci(results['unitarity_fro'])),
+    ]
+
+    def write_table(path, rows):
+        with open(DATA / path, 'w') as f:
+            f.write('\\small\n')
+            f.write('\\begin{tabular}{L{0.22\\linewidth}L{0.30\\linewidth}L{0.40\\linewidth}}\n')
+            f.write('\\toprule\n')
+            f.write('Diagnostic & Quantity & Value \\\\ \n')
+            f.write('\\midrule\n')
+            for exp, quantity, value in rows:
+                f.write(f'{exp} & {quantity} & {value} \\\\ \n')
+            f.write('\\bottomrule\n')
+            f.write('\\end{tabular}\n')
+
+    write_table('diagnostic_table_core.tex', core_rows)
+    write_table('diagnostic_table_stress.tex', stress_rows)
+
     with open(DATA / 'diagnostic_table.tex', 'w') as f:
         f.write('\\small\n')
         f.write('\\begin{tabular}{L{0.22\\linewidth}L{0.31\\linewidth}L{0.33\\linewidth}}\n')
         f.write('\\toprule\n')
         f.write('Diagnostic & Quantity & Value \\\\ \n')
         f.write('\\midrule\n')
-        rows = [
-            ('Free packet', 'max norm error', math_sci(results['free_norm_error'])),
-            ('Free packet', 'max full-state error', math_sci(results['free_state_error'])),
-            ('Free packet', 'max center error', math_sci(results['free_center_error'])),
-            ('Free packet', 'max variance error', math_sci(results['free_variance_error'])),
-            ('Barrier', '$T$ and spectral estimate', f"{results['barrier_Trans']:.3f}, {results['barrier_weighted_T']:.3f}"),
-            ('Harmonic oscillator', 'max center error', math_sci(results['harmonic_center_error'])),
-            ('Boundary tails', 'free/barrier/harmonic maxima', f"{math_sci(results['free_tail_mass'])}, {math_sci(results['barrier_tail_mass'])}, {math_sci(results['harmonic_tail_mass'])}"),
-            ('Harmonic oscillator', 'max energy error', math_sci(results['harmonic_energy_error'])),
-            ('Norm comparison', 'forward Euler final norm', f"{results['compare_fe_final_norm']:.3f}"),
-            ('Method comparison', 'CN state error', math_sci(results['method_cn_state_error'])),
-            ('Method comparison', 'Yoshida 4 state error', math_sci(results['method_y4_state_error'])),
-            ('Precision sensitivity', 'complex128/complex64 norm errors', f"{math_sci(results['precision_complex128_norm_error'])}, {math_sci(results['precision_complex64_norm_error'])}"),
-            ('Time reversal', 'free/barrier/harmonic errors', f"{math_sci(results['reverse_free_error'])}, {math_sci(results['reverse_barrier_error'])}, {math_sci(results['reverse_harmonic_error'])}"),
-            ('Temporal convergence', 'observed slope', f"{results['conv_slope']:.2f}"),
-            ('Spatial refinement', 'error ratio', math_sci(results['spatial_ratio'])),
-            ('Long-time norm', 'max norm error', math_sci(results['long_norm_error'])),
-            ('Explicit matrix', 'Frobenius defect', math_sci(results['unitarity_fro'])),
-        ]
-        for exp, quantity, value in rows:
+        for exp, quantity, value in core_rows + stress_rows:
             f.write(f'{exp} & {quantity} & {value} \\\\ \n')
         f.write('\\bottomrule\n')
         f.write('\\end{tabular}\n')
@@ -901,9 +940,15 @@ def make_macros(results):
         f.write(dec_macro('BarrierWeightedT', results['barrier_weighted_T']))
         f.write(sci_macro('BarrierTDifference', results['barrier_T_difference']))
         f.write(sci_macro('BarrierTailMass', results['barrier_tail_mass']))
+        f.write(sci_macro('BarrierTailLeft', results['barrier_tail_left']))
+        f.write(sci_macro('BarrierTailRight', results['barrier_tail_right']))
+        f.write(dec_macro('BarrierAboveSpectralMass', results['barrier_above_spectral_mass']))
+        f.write(dec_macro('BarrierAboveTContribution', results['barrier_above_T_contribution']))
+        f.write(dec_macro('BarrierBelowTContribution', results['barrier_below_T_contribution']))
         f.write(sci_macro('HarmonicNormError', results['harmonic_norm_error']))
         f.write(sci_macro('HarmonicEnergyError', results['harmonic_energy_error']))
         f.write(sci_macro('HarmonicCenterError', results['harmonic_center_error']))
+        f.write(sci_macro('HarmonicVarianceError', results['harmonic_variance_error']))
         f.write(sci_macro('HarmonicTailMass', results['harmonic_tail_mass']))
         f.write(sci_macro('CompareSSFNormError', results['compare_ssf_norm_error']))
         f.write(dec_macro('CompareFEFinalNorm', results['compare_fe_final_norm']))

@@ -11,3 +11,17 @@ dist/
 *.egg-info/
 .DS_Store
 Thumbs.db
+
+# Keep this repository focused on code, data, and result figures.
+*.aux
+*.bbl
+*.blg
+*.log
+*.out
+*.synctex.gz
+*.tex
+results_macros.tex
+build/
+submission_package/
+internal_notes/
+Brandon_Deonarine_SSF_LaTeX_Preprint*

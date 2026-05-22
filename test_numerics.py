@@ -60,6 +60,30 @@ def test_square_barrier_transmission_is_physical():
     assert np.all(T <= 1.0)
 
 
+def test_barrier_spectral_breakdown_is_consistent():
+    L, N = 100.0, 512
+    x, k, dx = gf.grid(L, N)
+    psi0 = gf.normalize(gf.gaussian(x, x0=-30.0, sigma=2.5, k0=2.2), dx)
+    breakdown = gf.barrier_spectral_breakdown(psi0, k, V0=3.0, width=3.0)
+    total = breakdown['above_contribution'] + breakdown['below_contribution']
+    assert abs(total - breakdown['weighted_T']) < 1e-14
+    assert 0.0 <= breakdown['above_mass'] <= 1.0
+    assert breakdown['above_contribution'] >= 0.0
+    assert breakdown['below_contribution'] >= 0.0
+
+
+def test_harmonic_ground_state_width_is_stable_over_short_run():
+    L, N = 50.0, 512
+    x, k, dx = gf.grid(L, N)
+    omega = 0.4
+    sigma = np.sqrt(gf.HBAR / (2 * gf.MASS * omega))
+    V = 0.5 * omega**2 * x**2
+    psi = gf.normalize(gf.gaussian(x, x0=4.0, sigma=sigma, k0=0.0), dx)
+    for _ in range(200):
+        psi = gf.split_step(psi, V, k, 0.01)
+    assert abs(gf.variance_x(psi, x, dx) - sigma**2) < 1e-3
+
+
 def test_yoshida4_split_preserves_norm():
     L, N = 20.0, 128
     x, k, dx = gf.grid(L, N)
@@ -88,6 +112,8 @@ if __name__ == '__main__':
     test_normalized_dft_matrix_is_unitary()
     test_split_step_time_reversal_recovers_state()
     test_square_barrier_transmission_is_physical()
+    test_barrier_spectral_breakdown_is_consistent()
+    test_harmonic_ground_state_width_is_stable_over_short_run()
     test_yoshida4_split_preserves_norm()
     test_stored_dtype_split_step_preserves_shape_and_dtype()
     print('All numerical regression tests passed.')
