@@ -3,6 +3,7 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.ipynb_checkpoints/
 .venv/
 venv/
 env/
@@ -21,7 +22,6 @@ Thumbs.db
 *.synctex.gz
 *.tex
 results_macros.tex
-build/
 submission_package/
 internal_notes/
 Brandon_Deonarine_SSF_LaTeX_Preprint*

@@ -1,6 +1,6 @@
 # Split-Step Fourier Diagnostics
 
-Numerical experiments for a one-dimensional split-step Fourier solver for the time-dependent Schrodinger equation.
+Numerical experiments for a one-dimensional split-step Fourier solver for the time-dependent Schrödinger equation.
 
 This repo is intentionally just the reproducibility side: Python code, generated data, regression tests, and result figures. It does not include the paper source, LaTeX build files, or private submission notes.
 
@@ -21,6 +21,7 @@ The repository contains:
 ├── assets/readme/               PNG previews used in this README
 ├── .github/workflows/tests.yml  CI smoke checks
 ├── requirements.txt
+├── requirements-lock.txt
 └── environment.yml
 ```
 
@@ -115,6 +116,12 @@ python -m venv .venv
 python -m pip install -r requirements.txt
 ```
 
+For an exact local environment snapshot, use `requirements-lock.txt`.
+
+```bash
+python -m pip install -r requirements-lock.txt
+```
+
 Using `conda`:
 
 ```bash
@@ -183,4 +190,4 @@ The experiments use dimensionless units and periodic grids. Boundary-tail diagno
 
 ## Citation
 
-If you use the code or generated diagnostics, cite this repository and the accompanying manuscript. Citation metadata is provided in `CITATION.cff`.
+If you use the code or generated diagnostics, cite this repository. Citation metadata is provided in `CITATION.cff`.

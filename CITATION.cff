@@ -1,18 +1,18 @@
 cff-version: 1.2.0
-message: "If you use this Split-Step Fourier Schrodinger propagation package, please cite the associated manuscript."
-title: "Discrete Unitarity and Reproducible Diagnostics for Split-Step Fourier Schrodinger Propagation"
+message: "If you use this Split-Step Fourier Schrödinger propagation package, please cite this repository."
+title: "Finite-Dimensional Unitarity and Reproducible Diagnostics for Split-Step Fourier Schrödinger Propagation"
 type: software
 authors:
   - family-names: Deonarine
     given-names: Brandon
-abstract: "Reproducibility package for a journal-style manuscript on finite-dimensional discrete unitarity and diagnostic benchmarks for one-dimensional split-step Fourier Schrodinger propagation."
+abstract: "Reproducibility package for finite-dimensional unitarity and diagnostic benchmarks for one-dimensional split-step Fourier Schrödinger propagation."
 keywords:
   - split-step Fourier
-  - Schrodinger equation
+  - Schrödinger equation
   - Strang splitting
   - spectral methods
   - reproducible diagnostics
 license: MIT
 repository-code: "https://github.com/M3RCU3Y/SSF"
 date-released: "2026-05-22"
-version: "journal-submission-prep"
+version: "0.1.0"

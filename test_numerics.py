@@ -1,4 +1,9 @@
 import numpy as np
+from pathlib import Path
+import sys
+
+ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT))
 
 import generate_figures as gf
 

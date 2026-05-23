@@ -1,0 +1,4 @@
+# Pinned package versions from the local reproduction environment.
+# Python 3.12.5 was used for this snapshot.
+matplotlib==3.10.8
+numpy==2.3.0

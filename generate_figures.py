@@ -27,6 +27,53 @@ def set_root(root):
 HBAR = 1.0
 MASS = 1.0
 
+PALETTE = {
+    'blue': '#0072B2',
+    'sky': '#56B4E9',
+    'green': '#009E73',
+    'orange': '#E69F00',
+    'vermillion': '#D55E00',
+    'purple': '#CC79A7',
+    'yellow': '#F0E442',
+    'black': '#111111',
+    'axis': '#363636',
+    'grid': '#D6D6D6',
+    'soft_gray': '#B8B8B8',
+    'barrier': '#7A7A7A',
+}
+
+SEMANTIC_COLORS = {
+    'computed': PALETTE['blue'],
+    'analytic': PALETTE['orange'],
+    'reference': PALETTE['axis'],
+    'error': PALETTE['vermillion'],
+    'state_error': PALETTE['blue'],
+    'norm_error': PALETTE['orange'],
+    'spectral': PALETTE['black'],
+    'reflected': PALETTE['orange'],
+    'trapped': PALETTE['soft_gray'],
+    'transmitted': PALETTE['blue'],
+    'barrier': PALETTE['barrier'],
+}
+
+FIGSIZE = {
+    'snapshot': (6.6, 3.35),
+    'heatmap': (6.55, 3.45),
+    'single': (5.9, 3.25),
+    'compact': (5.4, 3.15),
+    'comparison': (6.35, 3.65),
+    'panel2': (7.0, 3.0),
+    'wide': (6.4, 3.2),
+}
+
+SNAPSHOT_STYLES = [
+    {'color': PALETTE['black'], 'linestyle': '-', 'linewidth': 1.25, 'alpha': 0.75},
+    {'color': PALETTE['blue'], 'linestyle': '-', 'linewidth': 1.55, 'alpha': 0.95},
+    {'color': PALETTE['green'], 'linestyle': '--', 'linewidth': 1.55, 'alpha': 0.95},
+    {'color': PALETTE['orange'], 'linestyle': '-.', 'linewidth': 1.55, 'alpha': 0.95},
+    {'color': PALETTE['vermillion'], 'linestyle': ':', 'linewidth': 1.8, 'alpha': 0.98},
+]
+
 plt.rcParams.update({
     'font.family': 'serif',
     'font.serif': ['Computer Modern Roman', 'DejaVu Serif', 'Times New Roman'],
@@ -41,10 +88,77 @@ plt.rcParams.update({
     'savefig.dpi': 300,
     'pdf.fonttype': 42,
     'ps.fonttype': 42,
-    'axes.grid': True,
+    'axes.grid': False,
+    'axes.edgecolor': PALETTE['axis'],
+    'axes.labelcolor': PALETTE['axis'],
     'grid.alpha': 0.25,
+    'grid.color': PALETTE['grid'],
+    'grid.linewidth': 0.55,
     'lines.linewidth': 1.45,
+    'legend.frameon': True,
+    'legend.framealpha': 0.92,
+    'legend.edgecolor': '#C9C9C9',
+    'legend.facecolor': 'white',
 })
+plt.rcParams['axes.prop_cycle'] = plt.cycler(color=[
+    PALETTE['blue'], PALETTE['orange'], PALETTE['green'],
+    PALETTE['vermillion'], PALETTE['purple'], PALETTE['sky'],
+])
+
+
+def style_axis(ax, grid=True):
+    ax.tick_params(direction='out', length=3.2, width=0.7, colors=PALETTE['axis'])
+    for spine in ('top', 'right'):
+        ax.spines[spine].set_visible(False)
+    for spine in ('left', 'bottom'):
+        ax.spines[spine].set_color(PALETTE['axis'])
+        ax.spines[spine].set_linewidth(0.75)
+    if grid:
+        ax.grid(True, which='major', color=PALETTE['grid'], alpha=0.55, linewidth=0.55)
+        if ax.get_xscale() == 'log' or ax.get_yscale() == 'log':
+            ax.grid(True, which='minor', color=PALETTE['grid'], alpha=0.25, linewidth=0.4)
+    else:
+        ax.grid(False)
+
+
+def style_figure(fig):
+    for ax in fig.axes:
+        if getattr(ax, '_ssf_skip_style', False):
+            continue
+        style_axis(ax, grid=not bool(ax.images))
+
+
+def add_barrier_band(ax, left, right, label=None, facecolor=None, edgecolor=None,
+                     alpha=0.16, textcolor=None, zorder=0):
+    facecolor = facecolor or SEMANTIC_COLORS['barrier']
+    edgecolor = edgecolor or SEMANTIC_COLORS['barrier']
+    textcolor = textcolor or edgecolor
+    ax.axvspan(left, right, facecolor=facecolor, alpha=alpha, linewidth=0, zorder=zorder)
+    ax.axvline(left, color=edgecolor, alpha=0.78, linewidth=0.85, zorder=zorder + 1)
+    ax.axvline(right, color=edgecolor, alpha=0.78, linewidth=0.85, zorder=zorder + 1)
+    if label:
+        ax.text(
+            0.5 * (left + right), 0.965, label,
+            transform=ax.get_xaxis_transform(), ha='center', va='top',
+            fontsize=8.2, color=textcolor,
+            bbox={'boxstyle': 'round,pad=0.18', 'facecolor': 'white', 'edgecolor': 'none', 'alpha': 0.82},
+        )
+
+
+def place_legend(ax, **kwargs):
+    defaults = {'frameon': True, 'borderpad': 0.35, 'handlelength': 2.0, 'handletextpad': 0.55}
+    defaults.update(kwargs)
+    return ax.legend(**defaults)
+
+
+def label_points(ax, xs, ys, labels=None, fmt='{:.1e}', dx=4, dy=0, ha='left', va='center'):
+    if labels is None:
+        labels = [fmt.format(v) for v in ys]
+    for x_val, y_val, label in zip(xs, ys, labels):
+        ax.annotate(
+            label, (x_val, y_val), xytext=(dx, dy), textcoords='offset points',
+            ha=ha, va=va, fontsize=8.1, color=PALETTE['axis']
+        )
 
 
 def grid(L, N):
@@ -283,43 +397,50 @@ def run_ssf(psi0, V, k, dx, dt, T, sample_every=None, snapshots=()):
 
 
 def save_pdf(fig, filename):
+    style_figure(fig)
     fig.tight_layout()
     fig.savefig(FIG / filename, bbox_inches='tight')
     plt.close(fig)
 
 
 def plot_snapshots(filename, x, snaps, dt, snap_times, title, xlim=None, ylim=None, potential=None, potential_label=None):
-    fig, ax = plt.subplots(figsize=(6.5, 3.35))
-    for t in snap_times:
+    fig, ax = plt.subplots(figsize=FIGSIZE['snapshot'])
+    for idx, t in enumerate(snap_times):
         step = int(round(t / dt))
         psi = snaps[step]
-        ax.plot(x, np.abs(psi)**2, label=rf'$t={t:g}$')
+        style = SNAPSHOT_STYLES[idx % len(SNAPSHOT_STYLES)]
+        ax.plot(x, np.abs(psi)**2, label=rf'$t={t:g}$', **style)
     if potential is not None and np.max(potential) > 0:
-        scaled = 0.18 * potential / np.max(potential)
-        ax.fill_between(x, 0, scaled, alpha=0.18, step='mid', label=potential_label or 'scaled $V$')
+        support = x[potential > 0]
+        if support.size:
+            dx = x[1] - x[0] if x.size > 1 else 0.0
+            add_barrier_band(ax, support[0], support[-1] + dx, label=potential_label or 'barrier')
     ax.set_xlabel(r'$x$')
     ax.set_ylabel(r'$|\psi(x,t)|^2$')
     if xlim:
         ax.set_xlim(*xlim)
     if ylim:
         ax.set_ylim(*ylim)
-    ax.legend(ncol=min(len(snap_times), 5), frameon=True)
+    ax.margins(x=0)
+    place_legend(ax, ncol=min(len(snap_times), 3), loc='upper right')
     save_pdf(fig, filename)
 
 
 def plot_heatmap(filename, x, t, heat, title, xlim=None, barrier=None):
-    fig, ax = plt.subplots(figsize=(6.55, 3.45))
+    fig, ax = plt.subplots(figsize=FIGSIZE['heatmap'])
     im = ax.imshow(heat, origin='lower', aspect='auto', extent=[x[0], x[-1], t[0], t[-1]], cmap='viridis')
     if barrier is not None:
-        ax.axvspan(barrier[0], barrier[1], color='white', alpha=0.19, linewidth=0)
-        ax.axvline(barrier[0], color='white', alpha=0.55, linewidth=0.8)
-        ax.axvline(barrier[1], color='white', alpha=0.55, linewidth=0.8)
+        add_barrier_band(
+            ax, barrier[0], barrier[1], label='barrier',
+            facecolor='white', edgecolor='white', alpha=0.13, textcolor=PALETTE['black'], zorder=3
+        )
     if xlim:
         ax.set_xlim(*xlim)
     ax.set_xlabel(r'$x$')
     ax.set_ylabel(r'$t$')
     cbar = fig.colorbar(im, ax=ax, pad=0.015)
     cbar.set_label(r'$|\psi|^2$')
+    cbar.ax._ssf_skip_style = True
     save_pdf(fig, filename)
 
 
@@ -406,14 +527,38 @@ def experiment_barrier():
     Tr = dx * np.sum(dens[x > b])
     spectral = barrier_spectral_breakdown(psi0, k, V0, b - a)
     weighted_T = spectral['weighted_T']
-    fig, ax = plt.subplots(figsize=(5.2, 3.1))
-    ax.bar([0,1,2], [R,B,Tr], tick_label=[r'$R$', r'$B$', r'$T$'])
-    ax.scatter([2], [weighted_T], marker='D', s=42, color='crimson', zorder=5, label='spectral estimate')
+    fig, ax = plt.subplots(figsize=FIGSIZE['compact'])
+    partition_values = [R, B, Tr]
+    partition_colors = [
+        SEMANTIC_COLORS['reflected'],
+        SEMANTIC_COLORS['trapped'],
+        SEMANTIC_COLORS['transmitted'],
+    ]
+    ax.bar(
+        [0, 1, 2], partition_values, tick_label=[r'$R$', r'$B$', r'$T$'],
+        color=partition_colors, edgecolor=PALETTE['axis'], linewidth=0.55
+    )
+    ax.scatter(
+        [2], [weighted_T], marker='D', s=48, color=SEMANTIC_COLORS['spectral'],
+        edgecolor='white', linewidth=0.5, zorder=5, label='spectral estimate'
+    )
     ax.set_ylim(0, 1)
     ax.set_ylabel('probability mass')
-    for i,v in enumerate([R,B,Tr]):
-        ax.text(i, v + 0.02, f'{v:.3f}', ha='center', va='bottom', fontsize=8)
-    ax.legend(frameon=True, loc='upper right')
+    for i, v in enumerate(partition_values):
+        ax.text(i, v + 0.025, f'{v:.3f}', ha='center', va='bottom', fontsize=8.2, color=PALETTE['axis'])
+    label_points(ax, [2], [weighted_T], labels=[f'{weighted_T:.3f}'], dx=7, dy=0)
+    place_legend(ax, loc='upper right')
+    inset = ax.inset_axes([0.50, 0.38, 0.34, 0.34])
+    inset_values = [B, Tr, weighted_T]
+    inset_labels = [r'$B$', r'$T$', r'$T_{\mathrm{spec}}$']
+    inset_colors = [SEMANTIC_COLORS['trapped'], SEMANTIC_COLORS['transmitted'], SEMANTIC_COLORS['spectral']]
+    inset.bar(np.arange(3), inset_values, color=inset_colors, edgecolor=PALETTE['axis'], linewidth=0.45)
+    inset.set_xticks(np.arange(3))
+    inset.set_xticklabels(inset_labels, fontsize=7.2)
+    inset.set_ylabel('small masses', fontsize=7.2)
+    inset.tick_params(axis='y', labelsize=7.0)
+    inset.set_ylim(0, max(inset_values) * 1.35)
+    style_axis(inset, grid=True)
     save_pdf(fig, 'fig_barrier_partition.pdf')
     return {
         'barrier_L': L, 'barrier_N': N, 'barrier_dt': dt, 'barrier_Tfinal': T,
@@ -700,10 +845,21 @@ def experiment_time_reversal():
             psi = split_step(psi, V, k, -dt)
         err = norm(phase_align(psi, psi0, dx) - psi0, dx)
         cases.append((name, err))
-    fig, ax = plt.subplots(figsize=(5.4, 3.15))
-    ax.bar([c[0] for c in cases], [c[1] for c in cases])
-    ax.set_yscale('log')
-    ax.set_ylabel(r'phase-aligned recovery error')
+    names = [c[0] for c in cases]
+    errors = np.array([c[1] for c in cases])
+    y = np.arange(len(cases))
+    floor = 1e-18
+    colors = [PALETTE['blue'], PALETTE['orange'], PALETTE['green']]
+    fig, ax = plt.subplots(figsize=FIGSIZE['compact'])
+    ax.hlines(y, floor, np.maximum(errors, floor), color=colors, linewidth=2.0, alpha=0.85)
+    ax.scatter(np.maximum(errors, floor), y, color=colors, edgecolor='white', linewidth=0.6, s=58, zorder=4)
+    label_points(ax, np.maximum(errors, floor), y, labels=[rf'${format_sci(v)}$' for v in errors], dx=6)
+    ax.set_xscale('log')
+    ax.set_yticks(y)
+    ax.set_yticklabels(names)
+    ax.set_xlabel(r'phase-aligned recovery error')
+    ax.set_xlim(floor, max(errors) * 8.0)
+    ax.invert_yaxis()
     save_pdf(fig, 'fig_time_reversal.pdf')
     return {
         'reverse_free_error': float(cases[0][1]),
@@ -750,18 +906,26 @@ def experiment_method_comparison():
         })
 
     names = [row['method'] for row in rows]
-    state_errors = [row['state_error'] for row in rows]
-    norm_errors = [max(row['norm_error'], 1e-18) for row in rows]
-    pos = np.arange(len(rows))
-    fig, ax = plt.subplots(figsize=(6.45, 3.35))
-    width = 0.38
-    ax.bar(pos - width/2, state_errors, width, label='state error')
-    ax.bar(pos + width/2, norm_errors, width, label='norm error')
-    ax.set_yscale('log')
-    ax.set_xticks(pos)
-    ax.set_xticklabels(names, rotation=18, ha='right')
-    ax.set_ylabel('error at final time')
-    ax.legend(frameon=True)
+    state_errors = np.array([max(row['state_error'], 1e-18) for row in rows])
+    norm_errors = np.array([max(row['norm_error'], 1e-18) for row in rows])
+    y = np.arange(len(rows))
+    height = 0.34
+    fig, ax = plt.subplots(figsize=FIGSIZE['comparison'])
+    ax.barh(
+        y - height/2, state_errors, height, label='state error',
+        color=SEMANTIC_COLORS['state_error'], edgecolor=PALETTE['axis'], linewidth=0.45
+    )
+    ax.barh(
+        y + height/2, norm_errors, height, label='norm error',
+        color=SEMANTIC_COLORS['norm_error'], edgecolor=PALETTE['axis'], linewidth=0.45
+    )
+    ax.set_xscale('log')
+    ax.set_yticks(y)
+    ax.set_yticklabels(names)
+    ax.set_xlabel('error at final time')
+    ax.set_xlim(1e-18, max(np.max(state_errors), np.max(norm_errors)) * 8.0)
+    ax.invert_yaxis()
+    place_legend(ax, loc='lower right')
     save_pdf(fig, 'fig_method_comparison.pdf')
 
     if WRITE_TEX:
@@ -808,10 +972,21 @@ def experiment_precision_sensitivity():
             max_norm_error = max(max_norm_error, abs(norm2(psi, dx) - norm0))
         rows.append((label, max_norm_error))
 
-    fig, ax = plt.subplots(figsize=(5.1, 3.1))
-    ax.bar([row[0] for row in rows], [row[1] for row in rows])
-    ax.set_yscale('log')
-    ax.set_ylabel(r'max norm error')
+    labels = [row[0] for row in rows]
+    errors = np.array([max(row[1], 1e-18) for row in rows])
+    y = np.arange(len(rows))
+    fig, ax = plt.subplots(figsize=FIGSIZE['compact'])
+    ax.barh(
+        y, errors, color=[PALETTE['blue'], PALETTE['vermillion']],
+        edgecolor=PALETTE['axis'], linewidth=0.5
+    )
+    ax.set_xscale('log')
+    ax.set_yticks(y)
+    ax.set_yticklabels(labels)
+    ax.set_xlabel(r'max norm error')
+    ax.set_xlim(1e-18, np.max(errors) * 8.0)
+    ax.invert_yaxis()
+    label_points(ax, errors, y, labels=[rf'${format_sci(row[1])}$' for row in rows], dx=6)
     save_pdf(fig, 'fig_precision_sensitivity.pdf')
 
     if WRITE_TEX:
@@ -833,6 +1008,8 @@ def experiment_precision_sensitivity():
 
 
 def make_parameter_table(results):
+    if not WRITE_TEX:
+        return
     rows = [
         ('Free packet', results['free_L'], results['free_N'], results['free_dt'], results['free_T']),
         ('Barrier', results['barrier_L'], results['barrier_N'], results['barrier_dt'], results['barrier_Tfinal']),
@@ -857,6 +1034,9 @@ def make_parameter_table(results):
 
 
 def make_diagnostic_table(results):
+    if not WRITE_TEX:
+        return
+
     def math_sci(value):
         return f'${format_sci(value)}$'
 
@@ -878,7 +1058,7 @@ def make_diagnostic_table(results):
         ('Precision sensitivity', 'complex128/complex64 norm errors', f"{math_sci(results['precision_complex128_norm_error'])}, {math_sci(results['precision_complex64_norm_error'])}"),
         ('Time reversal', 'free/barrier/harmonic errors', f"{math_sci(results['reverse_free_error'])}, {math_sci(results['reverse_barrier_error'])}, {math_sci(results['reverse_harmonic_error'])}"),
         ('Temporal self-convergence', 'observed slope', f"{results['conv_slope']:.2f}"),
-        ('Spatial resolution', 'error ratio', math_sci(results['spatial_ratio'])),
+        ('Spatial resolution', 'coarse/fine errors', f"{math_sci(results['spatial_err_0'])}, {math_sci(results['spatial_err_last'])}"),
         ('Long-time norm', 'max norm error', math_sci(results['long_norm_error'])),
         ('Explicit matrix', 'Frobenius defect', math_sci(results['unitarity_fro'])),
     ]
@@ -923,7 +1103,10 @@ def make_macros(results):
         return rf'\newcommand{{\{name}}}{{${format_sci(float(x))}$}}' + '\n'
     def dec_macro(name, x, digits=3):
         return rf'\newcommand{{\{name}}}{{{float(x):.{digits}f}}}' + '\n'
-    with open(ROOT / 'results_macros.tex', 'w') as f:
+    macro_path = ROOT / 'manuscript' / 'results_macros.tex'
+    if not macro_path.parent.exists():
+        macro_path = ROOT / 'results_macros.tex'
+    with open(macro_path, 'w') as f:
         f.write('% Automatically generated by generate_figures.py.\n')
         f.write('% Raw values are stored in data/results_summary.json.\n')
         f.write(sci_macro('FreeNormError', results['free_norm_error']))
